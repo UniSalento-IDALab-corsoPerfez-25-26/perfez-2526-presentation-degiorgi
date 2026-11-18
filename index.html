@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Driving Style to Machine Stress</title>
+<meta name="description" content="An AI pipeline that turns wheel loader CAN signals into two cycle-by-cycle indicators: Operator Style Score (OSS) and Machine Stress Score (MSS).">
+<link rel="icon" href="assets/img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,400;0,700;1,400&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#171615; --bg2:#1d1c1b; --surface:#252322; --surface2:#2e2b29; --line:#3a3633;
+  --text:#ece7e1; --muted:#a8a29b; --dim:#7c766f;
+  --accent:#e08a1e; --accent-soft:rgba(224,138,30,.14); --normal:#7f97b5;
+  --good:#3f9a5a; --mod:#d9b630; --high:#e07b1e; --sev:#c8372d;
+  --serif:"Source Serif 4",Georgia,serif; --sans:Lato,system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,monospace;
+  --maxw:1120px; --r:14px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:72px}
+body{margin:0;background:var(--bg);color:var(--text);font:400 17px/1.65 var(--sans);-webkit-font-smoothing:antialiased}
+img{max-width:100%;display:block}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+h1,h2,h3{font-family:var(--serif);font-weight:700;line-height:1.15;margin:0;text-wrap:balance}
+h2{font-size:clamp(28px,4vw,40px)}
+h3{font-size:21px}
+p{margin:0 0 1em}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px}
+.eyebrow{font:700 12px/1 var(--sans);letter-spacing:.22em;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
+.lead{font-size:19px;color:var(--muted);max-width:760px}
+.muted{color:var(--muted)}
+code,.mono{font-family:var(--mono);font-size:.88em}
+
+/* nav */
+nav{position:sticky;top:0;z-index:20;background:rgba(23,22,21,.86);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;gap:20px;height:60px}
+nav .brand{display:flex;align-items:center;gap:10px;color:var(--text);font:700 15px var(--serif);white-space:nowrap}
+nav .brand img{width:30px;height:30px;border-radius:50%}
+nav ul{display:flex;gap:4px;list-style:none;margin:0 0 0 auto;padding:0;overflow-x:auto;scrollbar-width:none}
+nav ul::-webkit-scrollbar{display:none}
+nav li a{display:block;padding:6px 12px;border-radius:99px;color:var(--muted);font-size:14px;white-space:nowrap}
+nav li a:hover{color:var(--text);background:var(--surface);text-decoration:none}
+
+/* hero */
+.hero{position:relative;min-height:min(86vh,760px);display:flex;align-items:flex-end;overflow:hidden;border-bottom:1px solid var(--line)}
+.hero img.bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:60% 50%}
+.hero::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(23,22,21,.96) 0%,rgba(23,22,21,.82) 38%,rgba(23,22,21,.15) 75%),linear-gradient(0deg,var(--bg) 0%,transparent 35%)}
+.hero .wrap{position:relative;z-index:1;padding-bottom:72px;padding-top:96px;width:100%}
+.hero h1{font-size:clamp(40px,6.4vw,72px);max-width:720px}
+.hero .sub{font:italic 400 clamp(19px,2.2vw,24px)/1.4 var(--serif);color:var(--accent);margin:18px 0 22px}
+.hero .meta{color:var(--muted);font-size:15px;max-width:560px}
+.btns{display:flex;flex-wrap:wrap;gap:12px;margin-top:28px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:11px 20px;border-radius:99px;font-weight:700;font-size:15px;border:1px solid var(--line);color:var(--text);background:var(--surface)}
+.btn:hover{text-decoration:none;border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#1a1209}
+.btn svg{width:17px;height:17px}
+
+/* sections */
+section{padding:96px 0;border-bottom:1px solid var(--line)}
+section.alt{background:var(--bg2)}
+.head{margin-bottom:44px}
+.head h2+p{margin-top:16px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:center}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+.grid2>*,.grid3>*,.grid4>*,.pipe>*{min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:24px}
+.card h3{margin-bottom:8px}
+.card p:last-child{margin-bottom:0}
+figure{margin:0}
+figure img{border-radius:var(--r);border:1px solid var(--line);width:100%}
+figcaption{font-size:14px;color:var(--dim);margin-top:10px;font-style:italic}
+.question{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:var(--r);padding:26px 30px;font:italic 400 clamp(20px,2.4vw,26px)/1.4 var(--serif);margin-bottom:48px}
+
+/* stats */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;margin-top:48px}
+.stat .n{font:700 clamp(32px,4vw,44px)/1 var(--serif)}
+.stat .n.acc{color:var(--accent)}
+.stat .l{color:var(--muted);font-size:15px;margin-top:8px}
+
+/* pipeline */
+.pipe{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;counter-reset:s}
+.step{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:22px 20px}
+.step.here{border-color:var(--accent);background:linear-gradient(180deg,var(--accent-soft),var(--surface) 70%)}
+.step .k{counter-increment:s;font:700 12px var(--sans);letter-spacing:.18em;color:var(--accent);text-transform:uppercase}
+.step .k::before{content:counter(s,decimal-leading-zero) " · "}
+.step h3{font-size:19px;margin:10px 0 8px}
+.step p{font-size:15px;color:var(--muted);margin:0}
+.step .io{margin-top:14px;font-size:13px;color:var(--dim);border-top:1px dashed var(--line);padding-top:10px}
+.step .tag{position:absolute;top:-11px;right:16px;background:var(--accent);color:#1a1209;font:700 11px var(--sans);letter-spacing:.08em;text-transform:uppercase;padding:4px 10px;border-radius:99px}
+.outputs{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+.out{border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;display:flex;gap:16px;align-items:center}
+.out b{font:700 26px var(--serif);color:var(--accent);min-width:64px}
+.out span{color:var(--muted);font-size:15px}
+
+/* phases */
+.phases{display:grid;gap:12px;margin-top:24px}
+.phase{display:grid;grid-template-columns:120px 1fr;gap:16px;align-items:baseline;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+.phase b{font-family:var(--serif);font-size:18px}
+.phase code{color:var(--muted)}
+
+/* features */
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
+.chip{font:500 13px var(--mono);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:5px 9px;color:var(--text)}
+.chip.sel{border-color:var(--accent);color:var(--accent)}
+.fgroup .top{display:flex;justify-content:space-between;align-items:baseline}
+.fgroup .count{font:700 30px var(--serif);color:var(--accent)}
+.fgroup .note{font-size:14px;color:var(--dim);font-style:italic}
+
+/* results */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:20px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.kpi .v{font:700 26px var(--serif)}
+.kpi .t{font-size:13px;color:var(--muted)}
+
+/* tiers */
+.tierbar{display:flex;height:34px;border-radius:8px;overflow:hidden;font:700 12px var(--sans);margin:10px 0 4px}
+.tierbar div{display:flex;align-items:center;justify-content:center;color:#141210}
+.scale{display:flex;justify-content:space-between;font-size:12px;color:var(--dim)}
+.formula{font:500 15px var(--mono);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:14px 16px;color:var(--accent);overflow-x:auto;white-space:nowrap}
+ol.steps{padding-left:0;list-style:none;counter-reset:o;margin:0}
+ol.steps li{counter-increment:o;position:relative;padding:0 0 18px 48px}
+ol.steps li::before{content:counter(o);position:absolute;left:0;top:0;width:32px;height:32px;border-radius:50%;background:var(--accent);color:#1a1209;font:700 15px var(--sans);display:flex;align-items:center;justify-content:center}
+ol.steps b{display:block;font-family:var(--serif);font-size:18px}
+ol.steps span{color:var(--muted);font-size:15px}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--accent);font:700 12px var(--sans);letter-spacing:.14em;text-transform:uppercase}
+td code{color:var(--text)}
+
+/* uses */
+.use h3{display:flex;align-items:center;gap:12px}
+.use h3 .ic{width:40px;height:40px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;flex:none}
+.use h3 .ic img{width:24px;height:24px;filter:brightness(0)}
+.use ul{margin:14px 0 0;padding:0;list-style:none}
+.use li{padding:10px 0;border-top:1px solid var(--line);font-size:15px}
+.use li b{display:block}
+.use li span{color:var(--muted)}
+
+/* repos */
+.repo{display:flex;flex-direction:column;gap:6px}
+.repo .rk{font:700 12px var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+.repo h3{font-size:19px}
+.repo p{font-size:15px;color:var(--muted);flex:1}
+.repo a.go{font-weight:700;font-size:15px;margin-top:6px;overflow-wrap:anywhere}
+.repo.this{border-color:var(--accent)}
+
+.limits li{margin-bottom:10px;color:var(--muted)}
+.limits li b{color:var(--text)}
+
+footer{padding:48px 0;color:var(--dim);font-size:14px}
+footer .wrap{display:flex;flex-wrap:wrap;gap:24px;align-items:center;justify-content:space-between}
+footer .who{display:flex;gap:14px;align-items:center}
+footer img{width:48px;height:48px;border-radius:50%}
+footer b{color:var(--text);font-family:var(--serif);font-size:17px}
+
+@media (max-width:900px){
+  .grid2,.outputs{grid-template-columns:1fr}
+  .grid3{grid-template-columns:1fr}
+  .grid4,.pipe,.stats,.kpis{grid-template-columns:1fr 1fr}
+  section{padding:72px 0}
+  nav .brand span{display:none}
+}
+@media (max-width:560px){
+  .wrap{padding:0 16px}
+  .grid4,.pipe,.stats,.kpis{grid-template-columns:1fr}
+  .phase{grid-template-columns:1fr;gap:4px}
+  .hero::after{background:linear-gradient(0deg,var(--bg) 10%,rgba(23,22,21,.82) 60%,rgba(23,22,21,.5))}
+  th:nth-child(3),td:nth-child(3){display:none}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="assets/img/logo.png" alt=""><span>Driving Style → Machine Stress</span></a>
+    <ul>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#data">Data</a></li>
+      <li><a href="#oss">OSS</a></li>
+      <li><a href="#mss">MSS</a></li>
+      <li><a href="#interface">Interface</a></li>
+      <li><a href="#repos">Repositories</a></li>
+    </ul>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <img class="bg" src="assets/img/hero.jpg" alt="Wheel loader seen from above on a gravel site">
+  <div class="wrap">
+    <div class="eyebrow">Thesis project · Wheel loader analytics</div>
+    <h1>From Driving Style to Machine Abuse</h1>
+    <div class="sub">An AI pipeline for wheel loader operation</div>
+    <p class="meta">Y-cycle segmentation · feature engineering · cost-sensitive SVM · subsystem stress indices. From raw CAN signals to two 0–100 indicators read at a glance in the cab.</p>
+    <div class="btns">
+      <a class="btn primary" href="docs/Thesis_DrivingStyle_WheelLoader.pdf"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>Read the thesis</a>
+      <a class="btn" href="docs/Slides_DrivingStyle_WheelLoader.pdf"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Slides</a>
+      <a class="btn" href="#repos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></svg>Code</a>
+    </div>
+  </div>
+</header>
+
+<!-- OVERVIEW -->
+<section id="overview">
+  <div class="wrap">
+    <div class="eyebrow">01 · The problem</div>
+    <div class="question">Can we measure, cycle by cycle, how aggressively a wheel loader is driven, and what that costs the machine?</div>
+    <div class="grid3">
+      <div class="card"><h3>Safety</h3><p class="muted">Abrupt reversals and hard braking raise the risk of losing control on site.</p></div>
+      <div class="card"><h3>Energy</h3><p class="muted">Impulsive throttle and braking burn measurably more fuel in every cycle.</p></div>
+      <div class="card"><h3>Mechanical wear</h3><p class="muted">Repeated shock loads stress engine, transmission and brakes.</p></div>
+    </div>
+    <p class="lead" style="margin-top:32px">The three effects share one cause, the way the machine is driven, and that cause leaves a signature in the standard CAN signals the machine already exposes. The project turns those signals into <b style="color:var(--text)">two independent 0–100 indicators</b>: one for the operator, one for the machine.</p>
+    <div class="stats">
+      <div class="stat"><div class="n">1,678</div><div class="l">Y-cycles analysed</div></div>
+      <div class="stat"><div class="n">19 → 7</div><div class="l">features: candidates → selected</div></div>
+      <div class="stat"><div class="n">100%</div><div class="l">Balanced Accuracy on held-out cycles</div></div>
+      <div class="stat"><div class="n acc">OSS + MSS</div><div class="l">style and stress, side by side</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ARCHITECTURE -->
+<section id="architecture" class="alt">
+  <div class="wrap">
+    <div class="head">
+      <div class="eyebrow">02 · System architecture</div>
+      <h2>From raw signal to on-machine indicator</h2>
+      <p class="lead">Four stages, each with a clear input and output. Every step must explain which subsystem is stressed, and by how much: interpretability first.</p>
+    </div>
+    <div class="pipe">
+      <div class="step">
+        <div class="k">Segmentation</div>
+        <h3>Y-cycle detection</h3>
+        <p>A three-signal state machine on speed, boom and bucket angle finds Loading → Reverse → Unloading.</p>
+        <div class="io">CAN trace → segmented cycles</div>
+      </div>
+      <div class="step">
+        <div class="k">Features</div>
+        <h3>Feature extraction</h3>
+        <p>19 statistics per cycle (mean, std, max, RMS, jerk) over kinematics, pedal, braking and clutch.</p>
+        <div class="io">Cycles → one vector per cycle</div>
+      </div>
+      <div class="step here">
+        <span class="tag">Core</span>
+        <div class="k">Analysis</div>
+        <h3>Analysis &amp; modelling</h3>
+        <p>Separability tests, mRMR selection, cost-sensitive SVM, sigmoid calibration, Normal-referenced stress.</p>
+        <div class="io">Feature table → OSS, MSS per cycle</div>
+      </div>
+      <div class="step">
+        <div class="k">Interface</div>
+        <h3>Cab display &amp; dashboard</h3>
+        <p>Two cab views (style / stress) plus daily and monthly dashboards with operator filters.</p>
+        <div class="io">Scores → feedback &amp; planning</div>
+      </div>
+    </div>
+    <div class="outputs">
+      <div class="out"><b>OSS</b><span><b style="color:var(--text);font:inherit">Operator Style Score</b>: how is the machine being driven? Supervised.</span></div>
+      <div class="out"><b>MSS</b><span><b style="color:var(--text);font:inherit">Machine Stress Score</b>: what did this cycle cost the machine? Reference-based.</span></div>
+    </div>
+    <p class="muted" style="margin-top:14px;font-size:15px">Two independent outputs, never merged into a single number.</p>
+  </div>
+</section>
+
+<!-- DATA -->
+<section id="data">
+  <div class="wrap">
+    <div class="grid2">
+      <div>
+        <div class="eyebrow">03 · Unit of analysis</div>
+        <h2>The Y-cycle</h2>
+        <p class="lead" style="margin-top:16px">Load at the pile, reverse while raising the boom, advance to the truck and unload. It repeats many times per shift with the same geometry, so two cycles can be compared like two repetitions of the same experiment: what changes is <i>how</i> the operator executed them.</p>
+        <div class="phases">
+          <div class="phase"><b>Loading</b><code>v &gt; +2 km/h · boom &lt; −30° · bucket −20°…+3°</code></div>
+          <div class="phase"><b>Reverse</b><code>v &lt; −2 km/h · boom &lt; 0° · bucket &gt; +10°</code></div>
+          <div class="phase"><b>Unloading</b><code>|v| &lt; 2 km/h · boom &gt; −20° · bucket &lt; −20°</code></div>
+        </div>
+        <p class="muted" style="font-size:15px;margin-top:14px">A transition fires only when all three conditions hold; a valid cycle gets a unique ID.</p>
+      </div>
+      <figure><img src="assets/img/sim.jpg" alt="Wheel loader unloading into a truck"><figcaption>Y-cycle with payload: unloading at the truck (3D simulation).</figcaption></figure>
+    </div>
+
+    <div class="grid2" style="margin-top:64px;align-items:start">
+      <div class="card">
+        <div class="eyebrow">Dataset</div>
+        <div style="display:flex;gap:28px;flex-wrap:wrap;margin:6px 0 14px">
+          <div><div style="font:700 40px var(--serif);color:var(--normal)">1,571</div><div class="muted" style="font-size:14px">Normal cycles · 9 operators</div></div>
+          <div><div style="font:700 40px var(--serif);color:var(--accent)">107</div><div class="muted" style="font-size:14px">Aggressive cycles · driven at the limit</div></div>
+          <div><div style="font:700 40px var(--serif)">14.7 : 1</div><div class="muted" style="font-size:14px">imbalance, kept as is</div></div>
+        </div>
+        <p class="muted" style="margin:0;font-size:15px">A multi-operator Normal reference means "normal" covers many drivers, not one person's habits. The imbalance is not resampled: it is handled by the SVM cost function.</p>
+      </div>
+      <div class="card">
+        <div class="eyebrow">Signals used</div>
+        <table>
+          <tr><th>Role</th><th>Signals</th></tr>
+          <tr><td>Segmentation</td><td>vehicle speed, boom angle, bucket angle</td></tr>
+          <tr><td>Driveline</td><td>transmission input speed, engine speed, torque-converter slip</td></tr>
+          <tr><td>Operator commands</td><td>accelerator pedal, inching / clutch pressure</td></tr>
+          <tr><td>Reference only</td><td>fuel rate, engine load</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="head" style="margin:72px 0 28px">
+      <div class="eyebrow">Features</div>
+      <h2>One cycle, one vector of 19 features</h2>
+      <p class="lead">Highlighted: the 7 features kept by mRMR + cross-validation.</p>
+    </div>
+    <div class="grid2" style="align-items:stretch">
+      <div class="card fgroup"><div class="top"><h3>Kinematics &amp; motion</h3><span class="count">8</span></div>
+        <div class="chips"><span class="chip sel">MeanSpeed</span><span class="chip">StdSpeed</span><span class="chip sel">MeanGearInSpeed</span><span class="chip sel">StdGearInSpeed</span><span class="chip">MeanEngineSpeed</span><span class="chip">MeanConvSlip</span><span class="chip">JerkSpeed_mean</span><span class="chip">JerkSpeed_std</span></div>
+        <div class="note">How fast, how steady: jerk = mean |Δv|</div></div>
+      <div class="card fgroup"><div class="top"><h3>Accelerator pedal</h3><span class="count">6</span></div>
+        <div class="chips"><span class="chip">MeanThrottle</span><span class="chip sel">StdThrottle</span><span class="chip">MaxThrottle</span><span class="chip">RmsThrottle</span><span class="chip">JerkThrottle</span><span class="chip">IdleTimeRatio</span></div>
+        <div class="note">How abruptly power is requested</div></div>
+      <div class="card fgroup"><div class="top"><h3>Braking severity</h3><span class="count">3</span></div>
+        <div class="chips"><span class="chip sel">MeanDecel</span><span class="chip sel">MaxDecel</span><span class="chip">RmsDecel</span></div>
+        <div class="note">On decelerating samples only: D = { −Δv : Δv &lt; 0 }</div></div>
+      <div class="card fgroup"><div class="top"><h3>Clutch / inching</h3><span class="count">2</span></div>
+        <div class="chips"><span class="chip">MeanInchPress</span><span class="chip sel">StdInchPress</span></div>
+        <div class="note">Signature of forceful reversals</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- SEPARABILITY -->
+<section class="alt">
+  <div class="wrap">
+    <div class="grid2">
+      <figure><img src="assets/img/pca.jpg" alt="PCA scatter: Normal and Aggressive cycles form two separate clouds"><figcaption>PCA on the 19 standardised features. Labels are used only to colour the points.</figcaption></figure>
+      <div>
+        <div class="eyebrow">04 · Separability</div>
+        <h2>The classes separate before any model sees the labels</h2>
+        <p class="lead" style="margin-top:16px">Unsupervised checks and permutation tests come first. If the boundary were not in the data, no classifier result would be credible.</p>
+        <div class="kpis" style="grid-template-columns:1fr 1fr">
+          <div class="kpi"><div class="v">64.7%</div><div class="t">variance on PC1 alone, which already separates the classes</div></div>
+          <div class="kpi"><div class="v">0 overlap</div><div class="t">K-means (k = 2) finds exactly the two populations</div></div>
+          <div class="kpi"><div class="v">F = 1500</div><div class="t">PERMANOVA, p = 0.001, R² = 0.47 (999 permutations)</div></div>
+          <div class="kpi"><div class="v">H = 0.875</div><div class="t">Hopkins statistic (stratified 0.863), above the 0.75 cluster threshold</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- OSS -->
+<section id="oss">
+  <div class="wrap">
+    <div class="head">
+      <div class="eyebrow">05 · Operator Style Score</div>
+      <h2>A cost-sensitive SVM, calibrated to 0–100</h2>
+      <p class="lead">Stratified 75/25 hold-out, scaling fitted on the training set only, mRMR ranking on the training set, then 5-fold cross-validation picks the smallest feature set that reaches the best Balanced Accuracy.</p>
+    </div>
+    <div class="grid2" style="align-items:start">
+      <figure><img src="assets/img/mrmr.jpg" alt="mRMR ranking of the 19 features, top 7 highlighted"><figcaption>mRMR ranking on the training set: the 7 highlighted features are kept (driveline speed, braking, vehicle speed, clutch and pedal).</figcaption></figure>
+      <div>
+        <ol class="steps">
+          <li><b>RBF kernel</b><span>Curved decision boundary in the 7-D space: nothing guarantees aggressiveness is a linear combination of features.</span></li>
+          <li><b>Asymmetric cost</b><span>Missing an Aggressive cycle costs 14.7× a false alarm (cost ratio = #Normal / #Aggressive in the training set). Without it, the model would just answer "Normal".</span></li>
+          <li><b>Bayesian tuning</b><span>BoxConstraint and KernelScale optimised jointly with 5-fold cross-validation.</span></li>
+          <li><b>Sigmoid calibration</b><span>The signed distance from the boundary becomes a 0–100 score.</span></li>
+        </ol>
+        <div class="formula">OSS = 100 · 1 / (1 + e<sup>−score / T</sup>)</div>
+      </div>
+    </div>
+
+    <div style="margin-top:56px">
+      <figure><img src="assets/img/confusion.jpg" alt="Confusion matrix on the test set: 392 Normal and 27 Aggressive, zero errors"><figcaption>419 test cycles never seen in training: zero errors. 5-fold CV on the full dataset: 1.000 ± 0.000 (BA, recall, precision).</figcaption></figure>
+    </div>
+
+    <div class="grid2" style="margin-top:56px">
+      <figure><img src="assets/img/calibration.jpg" alt="Sigmoid calibration of the raw SVM score"></figure>
+      <div>
+        <h3>Reading the OSS</h3>
+        <div class="tierbar">
+          <div style="flex:40;background:var(--good)">Cautious</div>
+          <div style="flex:30;background:var(--mod)">Steady</div>
+          <div style="flex:20;background:var(--high)">Assertive</div>
+          <div style="flex:10;background:var(--sev)">Aggr.</div>
+        </div>
+        <div class="scale"><span>0</span><span>40</span><span>70</span><span>90</span><span>100</span></div>
+        <p class="muted" style="margin-top:18px">Median OSS: <b style="color:var(--normal)">12</b> for Normal cycles, <b style="color:var(--accent)">86</b> for Aggressive ones. No cycle of either class falls between 38 and 66. OSS says how the operator drives; it does not say what the machine is going through. That is the job of the MSS.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MSS -->
+<section id="mss" class="alt">
+  <div class="wrap">
+    <div class="head">
+      <div class="eyebrow">06 · Machine Stress Score</div>
+      <h2>Measuring stress as distance from "normal"</h2>
+      <p class="lead">No labels needed. Each feature is compared with the distribution of <b style="color:var(--text)">Normal cycles only</b>, then grouped by subsystem.</p>
+    </div>
+    <figure><img src="assets/img/stress_reference.jpg" alt="Reference curve fitted on Normal cycles and applied to every cycle"><figcaption>1. Fit the reference on Normal cycles only. 2. Apply the same reference to every cycle.</figcaption></figure>
+
+    <div class="grid2" style="margin-top:48px;align-items:start">
+      <div>
+        <ol class="steps">
+          <li><b>z-score of each feature</b><span><code>z = (x − μ<sub>Normal</sub>) / σ<sub>Normal</sub></code></span></li>
+          <li><b>Sum per subsystem</b><span>Features of the same subsystem are added together.</span></li>
+          <li><b>Re-standardise</b><span>The sum is z-scored again against Normal, so every subsystem ends on the same scale.</span></li>
+          <li><b>Map to 0–100</b><span><code>Stress(z) = 100 · (1 − e<sup>−max(z,0)/2</sup>)</code>: zero below the Normal mean, saturating for large deviations.</span></li>
+        </ol>
+        <div class="formula">MSS = 0.25·S<sub>Fuel</sub> + 0.25·S<sub>Engine</sub> + 0.25·S<sub>Trans</sub> + 0.25·S<sub>Brake</sub></div>
+      </div>
+      <div class="card">
+        <table>
+          <tr><th>Subsystem</th><th>Features</th></tr>
+          <tr><td>Fuel</td><td>mean fuel rate of the cycle</td></tr>
+          <tr><td>Engine</td><td><code>MeanEngineSpeed</code> <code>MeanThrottle</code> <code>MaxThrottle</code></td></tr>
+          <tr><td>Transmission</td><td><code>MeanGearInSpeed</code> <code>StdGearInSpeed</code> <code>MeanInchPress</code> <code>StdInchPress</code></td></tr>
+          <tr><td>Brake</td><td><code>MeanDecel</code> <code>MaxDecel</code> <code>RmsDecel</code></td></tr>
+        </table>
+        <div class="tierbar" style="margin-top:20px">
+          <div style="flex:65;background:var(--good)">Good</div>
+          <div style="flex:20;background:var(--mod)">Moderate</div>
+          <div style="flex:10;background:var(--high)">High</div>
+          <div style="flex:5;background:var(--sev)"></div>
+        </div>
+        <div class="scale"><span>0</span><span>65</span><span>85</span><span>95 Severe</span></div>
+      </div>
+    </div>
+
+    <figure style="margin-top:56px"><img src="assets/img/stress_distributions.jpg" alt="Stress distributions of Normal vs Aggressive cycles for fuel, engine, transmission, brake, MSS and OSS"><figcaption>Normal (blue) vs Aggressive (orange). Fuel was never a classifier input, yet it moves like the rest: independent physical evidence.</figcaption></figure>
+
+    <div class="grid2" style="margin-top:56px">
+      <div>
+        <h3>OSS vs MSS: correlated, not redundant</h3>
+        <div class="kpis" style="grid-template-columns:repeat(3,1fr)">
+          <div class="kpi"><div class="v">0.80</div><div class="t">Spearman ρ, all cycles</div></div>
+          <div class="kpi"><div class="v" style="color:var(--accent)">0.75</div><div class="t">Normal cycles only</div></div>
+          <div class="kpi"><div class="v">0.54</div><div class="t">Aggressive only</div></div>
+        </div>
+        <p class="muted" style="margin-top:18px">No cycle has high OSS with low MSS. But 45 Normal cycles reach MSS 60–73 with OSS &lt; 40: harder cycles that driving style does not explain (brakes lead in 47% of them). About half of the ranking is shared; the other half is what each indicator adds.</p>
+      </div>
+      <figure><img src="assets/img/oss_vs_mss.jpg" alt="Scatter of OSS vs MSS for every cycle"></figure>
+    </div>
+  </div>
+</section>
+
+<!-- INTERFACE -->
+<section id="interface">
+  <div class="wrap">
+    <div class="head">
+      <div class="eyebrow">07 · Interface</div>
+      <h2>In the cab: two indicators, one tap apart</h2>
+      <p class="lead">The same 0–100 scale and colours on both views. The operator never sees a model, only a score and a tip.</p>
+    </div>
+    <div class="grid2" style="align-items:start">
+      <figure><img src="assets/img/display_oss.jpg" alt="Cab display, OSS view"><figcaption><b>OSS view:</b> score and tier of the last cycle, trend of the last 15 cycles, alert after 3 aggressive cycles in a row.</figcaption></figure>
+      <figure><img src="assets/img/display_mss.jpg" alt="Cab display, MSS view"><figcaption><b>MSS view:</b> MSS of the last cycle, stress of engine, transmission, brakes and fuel, most stressed subsystem highlighted.</figcaption></figure>
+    </div>
+    <div class="grid2" style="margin-top:56px">
+      <figure style="max-width:420px;margin:0 auto"><img src="assets/img/dashboard.jpg" alt="Daily and monthly dashboard"></figure>
+      <div class="grid2" style="gap:16px">
+        <div class="card"><h3>Daily view</h3><p class="muted">"What happened in this shift?" Cards, radar and the cycle-by-cycle MSS sequence.</p></div>
+        <div class="card"><h3>Monthly view</h3><p class="muted">"How is this machine trending?" Daily average plus a calendar heat-map coloured by tier.</p></div>
+        <div class="card"><h3>Full traceability</h3><p class="muted">Calendar day → daily view → individual cycles. A red day is never a dead end.</p></div>
+        <div class="card"><h3>Operator filters</h3><p class="muted">Coach one operator; check that a trend is not driven by a single outlier.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- USES -->
+<section class="alt">
+  <div class="wrap">
+    <div class="head">
+      <div class="eyebrow">08 · Why it matters</div>
+      <h2>From a number to a decision</h2>
+    </div>
+    <div class="grid2" style="align-items:stretch">
+      <div class="card use">
+        <h3><span class="ic"><img src="assets/img/ic_user.png" alt=""></span>Operator Style Score</h3>
+        <p class="muted" style="margin:6px 0 0">For the people behind the wheel</p>
+        <ul>
+          <li><b>Operator coaching</b><span>Feedback after every cycle</span></li>
+          <li><b>Training &amp; certification</b><span>Objective, repeatable, same task for all</span></li>
+          <li><b>Site safety</b><span>Fewer abrupt moves near trucks and people</span></li>
+        </ul>
+      </div>
+      <div class="card use">
+        <h3><span class="ic"><img src="assets/img/ic_gauge.png" alt=""></span>Machine Stress Score</h3>
+        <p class="muted" style="margin:6px 0 0">For the machine and the fleet</p>
+        <ul>
+          <li><b>Usage-based maintenance</b><span>Service driven by real load</span></li>
+          <li><b>Targeted protection</b><span>Act on the component that suffers</span></li>
+          <li><b>Warranty &amp; rental</b><span>Objective evidence of use</span></li>
+          <li><b>Right machine for the site</b><span>Sizing and configuration</span></li>
+        </ul>
+      </div>
+    </div>
+    <div class="card" style="margin-top:28px">
+      <h3 style="margin-bottom:12px">Limits &amp; next steps</h3>
+      <ul class="limits" style="margin:0;padding-left:20px">
+        <li><b>Aggressive set.</b> The 107 Aggressive cycles come from a separate set driven deliberately at the limit by few operators; the 100% result must be confirmed on spontaneous aggressive driving.</li>
+        <li><b>MSS weights.</b> Equal weights are engineering assumptions; the next step is calibrating them on maintenance and component-life data.</li>
+        <li><b>Braking.</b> Deceleration is kinematic: active braking and coasting are not distinguished.</li>
+        <li><b>Next.</b> Multi-machine validation, extension beyond the Y-cycle, joystick signals once their quality improves.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- REPOS -->
+<section id="repos">
+  <div class="wrap">
+    <div class="head">
+      <div class="eyebrow">09 · Repositories</div>
+      <h2>Project components</h2>
+      <p class="lead">Each component lives in its own repository in the course organisation, with a README describing the whole project, its architecture and the specific component.</p>
+    </div>
+    <div class="grid2" style="align-items:stretch">
+      <div class="card repo this"><div class="rk">Component · Analysis</div><h3>Analysis &amp; modelling</h3><p>MATLAB pipeline: separability tests, mRMR selection, cost-sensitive SVM, Operator Style Score and Machine Stress Score. Includes thesis and slides.</p><a class="go" href="https://github.com/UniSalento-IDALab-corsoPerfez-25-26/perfez-2526-DrivingStyleAnalysis-degiorgi">perfez-2526-DrivingStyleAnalysis-degiorgi →</a></div>
+      <div class="card repo"><div class="rk">Presentation</div><h3>Project web page</h3><p>The page you are reading, published with GitHub Pages.</p><a class="go" href="https://github.com/UniSalento-IDALab-corsoPerfez-25-26/perfez-2526-presentation-degiorgi">perfez-2526-presentation-degiorgi →</a></div>
+    </div>
+    <div class="btns" style="margin-top:36px">
+      <a class="btn primary" href="docs/Thesis_DrivingStyle_WheelLoader.pdf">Thesis (PDF)</a>
+      <a class="btn" href="docs/Slides_DrivingStyle_WheelLoader.pdf">Defense slides (PDF)</a>
+      <a class="btn" href="docs/Slides_DrivingStyle_WheelLoader.pptx" download>Defense slides (PPTX)</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="who"><img src="assets/img/logo.png" alt="University seal"><div><b>Simone De Giorgi</b><br>Corso di perfezionamento in Tecnologie Digitali per Ambienti e Sistemi Intelligenti</div></div>
+    <div>Thesis project · 2026</div>
+  </div>
+</footer>
+
+</body>
+</html>
